@@ -248,7 +248,9 @@ jobs:
               print(f'ERROR: Coturn UDP 3478 STUN binding probe failed: {e}', file=sys.stderr)
               sys.exit(1)
           "
-          echo "PASS: Coturn TURN runtime healthcheck completed"
+
+          echo "=== 2b. Real RFC 5766 TURN Allocation & Relayed Port Range Verification ==="
+          python3 tests/docker_e2e/test_turn_allocate.py 127.0.0.1 3478 cloudphone_user cloudphone_secure_password
 
           echo "=== 3. Smoke Test Verified Backend Endpoints (Strict JSON Content-Type) ==="
           # A. /api/version - Must return application/json with version 0.3.6
@@ -290,7 +292,25 @@ jobs:
           echo "$ICE_RESP" | grep -iq "content-type: application/json" || { echo "ERROR: /api/turn did not return application/json: $ICE_RESP"; exit 1; }
           echo "$ICE_RESP" | grep -q "turn:" || { echo "ERROR: /api/turn missing TURN server URL: $ICE_RESP"; exit 1; }
           echo "PASS: /api/turn returned valid Coturn TURN configuration with Bearer token"
-          echo "=== 4. Docker Compose Down ==="
+
+          echo "=== 4. Live Container WSS / WebSocket End-to-End Test ==="
+          python3 tests/docker_e2e/test_wss_signaling.py 127.0.0.1 8443 "$AGENT_SECRET"
+
+          echo "=== 5. Persistence Mount & Container Restart E2E ==="
+          python3 tests/docker_e2e/test_persistence_restart.py stage1 127.0.0.1 8443 data
+          echo "Restarting signaling container to assert state preservation..."
+          docker compose restart signaling
+          echo "Waiting for signaling container to resume health..."
+          for i in $(seq 1 30); do
+            if curl -k -s https://127.0.0.1:8443/api/version | grep -q "0.3.6"; then
+              echo "Signaling service resumed healthy after restart!"
+              break
+            fi
+            sleep 1
+          done
+          python3 tests/docker_e2e/test_persistence_restart.py stage2 127.0.0.1 8443
+
+          echo "=== 6. Docker Compose Down ==="
           docker compose down -v
 
   publish-release:

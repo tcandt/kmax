@@ -107,8 +107,10 @@ This document establishes the official **40-Test Parity Matrix** comparing the o
 | **TC038** | `AgentPureGoCompilation` | `cloudphone-agent` cross-compile | Cross-compiles for Linux ARM64, ARMv7, AMD64 | Pure Go cross-compilation successful | **PASS** |
 | **TC039** | `AndroidKotlinAppStructure` | `android-app` Gradle project | Valid build.gradle, AndroidManifest, Shizuku, AudioTrack | Verified Gradle 8.5 project layout | **PASS** |
 | **TC040** | `DockerSourceBuildPipeline` | `Dockerfile` multi-stage | Pure source multi-stage Docker build pipeline | Clean 3-stage pure-source Docker build verified on CI run 34861222422 | **PASS** |
-| **TC044** | `DockerRuntimeSmoke` | Container HTTP/HTTPS health & endpoints | `/api/version`, `/api/auth-status`, `/devices`, `/api/login` JSON contract | Verified container HTTP health, authentication, fail-closed & success in CI smoke gate | **PASS** |
-| **TC045** | `CoturnStunTurn` | Coturn STUN probe & TURN allocation | TCP/UDP 3478 STUN binding & TURN relay | Verified Coturn STUN binding (port 3478) and TURN relay in CI smoke gate | **PASS** |
+| **TC044** | `DockerRuntimeSmokeHTTP` | Container HTTP/HTTPS health & endpoints | `/api/version`, `/api/auth-status`, `/devices`, `/api/login` JSON contract | Verified container HTTP health, authentication, fail-closed & success in CI smoke gate | **PASS** |
+| **TC045** | `CoturnStunTurnAllocation` | `test_turn_allocate.py` probe | UDP 3478 STUN Binding (0x0101) & RFC 5766 Authenticated Allocate (0x0103) | Strict XOR-RELAYED-ADDRESS verified in port range [49152, 49252] and clean deallocation | **PENDING CI** |
+| **TC046** | `DockerWSSSignalingE2E` | `test_wss_signaling.py` probe | Live container WSS 101 upgrade, unauth fail-closed, agent registration, WebRTC offer/answer routing | Full bidirectional SDP exchange Client <-> Signaling <-> Agent over WSS | **PENDING CI** |
+| **TC047** | `DockerPersistenceRestartE2E` | `test_persistence_restart.py` | Host volume mount `./data:/app/data` & state retention across container restart | Persistent share record created, flushed to disk, and verified after container restart | **PENDING CI** |
 
 ---
 
