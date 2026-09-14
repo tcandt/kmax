@@ -62,9 +62,9 @@ GATE E — Docker Deployment
   [x] Container runtime HTTPS healthcheck & auth contracts (/api/version, /devices, /api/login)
   [x] Coturn STUN UDP 3478 Binding probe (response 0x0101)
   [x] Coturn TURN configuration exposure (/api/turn)
-  [ ] Real Coturn RFC 5766 TURN allocation & relay port range verification (test_turn_allocate.py) [In CI Validation]
-  [ ] Live container WSS WebSocket signaling E2E (101 upgrade, auth fail-closed, offer/answer) [In CI Validation]
-  [ ] Container persistence mount & restart state retention E2E (test_persistence_restart.py) [In CI Validation]
+  [x] Real Coturn RFC 5766 TURN allocation & relay port range verification (test_turn_allocate.py)
+  [x] Live container WSS WebSocket signaling E2E (101 upgrade, auth fail-closed, offer/answer)
+  [x] Container persistence mount & restart state retention E2E (test_persistence_restart.py)
 
 GATE F — Real Android Device Verification
   [ ] Android 9 (Pie) compatibility

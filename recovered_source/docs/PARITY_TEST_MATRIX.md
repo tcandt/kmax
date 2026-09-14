@@ -108,9 +108,9 @@ This document establishes the official **40-Test Parity Matrix** comparing the o
 | **TC039** | `AndroidKotlinAppStructure` | `android-app` Gradle project | Valid build.gradle, AndroidManifest, Shizuku, AudioTrack | Verified Gradle 8.5 project layout | **PASS** |
 | **TC040** | `DockerSourceBuildPipeline` | `Dockerfile` multi-stage | Pure source multi-stage Docker build pipeline | Clean 3-stage pure-source Docker build verified on CI run 34861222422 | **PASS** |
 | **TC044** | `DockerRuntimeSmokeHTTP` | Container HTTP/HTTPS health & endpoints | `/api/version`, `/api/auth-status`, `/devices`, `/api/login` JSON contract | Verified container HTTP health, authentication, fail-closed & success in CI smoke gate | **PASS** |
-| **TC045** | `CoturnStunTurnAllocation` | `test_turn_allocate.py` probe | UDP 3478 STUN Binding (0x0101) & RFC 5766 Authenticated Allocate (0x0103) | Strict XOR-RELAYED-ADDRESS verified in port range [49152, 49252] and clean deallocation | **PENDING CI** |
-| **TC046** | `DockerWSSSignalingE2E` | `test_wss_signaling.py` probe | Live container WSS 101 upgrade, unauth fail-closed, agent registration, WebRTC offer/answer routing | Full bidirectional SDP exchange Client <-> Signaling <-> Agent over WSS | **PENDING CI** |
-| **TC047** | `DockerPersistenceRestartE2E` | `test_persistence_restart.py` | Host volume mount `./data:/app/data` & state retention across container restart | Persistent share record created, flushed to disk, and verified after container restart | **PENDING CI** |
+| **TC045** | `CoturnStunTurnAllocation` | `test_turn_allocate.py` probe | UDP 3478 STUN Binding (0x0101) & RFC 5766 Authenticated Allocate (0x0103) | Strict XOR-RELAYED-ADDRESS verified in port range [49152, 49252] and clean deallocation on CI run 34906487707 | **PASS** |
+| **TC046** | `DockerWSSSignalingE2E` | `test_wss_signaling.py` probe | Live container WSS 101 upgrade, unauth fail-closed, agent registration, WebRTC offer/answer routing | Full bidirectional SDP exchange Client <-> Signaling <-> Agent over WSS on CI run 34906487707 | **PASS** |
+| **TC047** | `DockerPersistenceRestartE2E` | `test_persistence_restart.py` | Host volume mount `./data:/app/data` & state retention across container restart | Persistent share record created, flushed to disk, and verified after container restart on CI run 34906487707 | **PASS** |
 
 ---
 
