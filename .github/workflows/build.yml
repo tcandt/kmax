@@ -1,0 +1,343 @@
+name: Build & Release Pipeline
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build-go-binaries:
+    name: Build Signaling & Agent Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run Signaling Protocol Conformance Tests
+        run: |
+          cd recovered_source/webrtc-signaling
+          go test -v -timeout 60s -run TestProtocolConformance .
+
+      - name: Run Agent Conformance, TURN Relay & WebRTC End-to-End Integration Tests
+        run: |
+          cd recovered_source/cloudphone-agent
+          go test -v -timeout 180s ./...
+
+      - name: Run Differential Parity Tests (Original vs Recovered)
+        run: |
+          cd recovered_source/webrtc-signaling
+          go test -v -timeout 60s -run TestGateC_DifferentialParity .
+
+      - name: Run Signaling Parity Matrix & Destructive Stress Tests (TC001-TC043)
+        run: |
+          cd recovered_source/webrtc-signaling
+          go test -v -timeout 180s -run "TestParityMatrix_TC" .
+
+      - name: Build Signaling Server Multi-Arch
+        run: |
+          cd recovered_source/webrtc-signaling
+          GOOS=linux GOARCH=amd64 go build -o webrtc-signaling-linux-amd64 .
+          GOOS=linux GOARCH=arm64 go build -o webrtc-signaling-linux-arm64 .
+          GOOS=windows GOARCH=amd64 go build -o webrtc-signaling-windows-amd64.exe .
+
+      - name: Build CloudPhone Agent Multi-Arch
+        run: |
+          cd recovered_source/cloudphone-agent
+          GOOS=linux GOARCH=amd64 go build -o cloudphone-agent-amd64 .
+          GOOS=linux GOARCH=arm64 go build -o cloudphone-agent-arm64 .
+          GOOS=linux GOARCH=arm GOARM=7 go build -o cloudphone-agent-armeabi-v7a .
+          GOOS=windows GOARCH=amd64 go build -o cloudphone-agent-windows-amd64.exe .
+
+      - name: Upload Binaries Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-binaries
+          path: |
+            recovered_source/webrtc-signaling/webrtc-signaling-*
+            recovered_source/cloudphone-agent/cloudphone-agent-*
+
+  build-web-app:
+    name: Build Vue Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          cd web-app
+          npm install
+          npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: assets/
+
+  build-android:
+    name: Build Android Components
+    runs-on: ubuntu-latest
+    needs: build-go-binaries
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Download Multi-Arch Core Binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: core-binaries
+          path: /tmp/core-binaries
+
+      - name: Stage Fresh Binaries for App Assets Bundling
+        run: |
+          mkdir -p recovered_source/cloudphone-agent recovered_source/webrtc-signaling
+          if [ -f /tmp/core-binaries/cloudphone-agent-arm64 ]; then
+            cp /tmp/core-binaries/cloudphone-agent-arm64 recovered_source/cloudphone-agent/cloudphone-agent-arm64
+          fi
+          if [ -f /tmp/core-binaries/cloudphone-agent-armeabi-v7a ]; then
+            cp /tmp/core-binaries/cloudphone-agent-armeabi-v7a recovered_source/cloudphone-agent/cloudphone-agent-armeabi-v7a
+          fi
+          if [ -f /tmp/core-binaries/cloudphone-agent-amd64 ]; then
+            cp /tmp/core-binaries/cloudphone-agent-amd64 recovered_source/cloudphone-agent/cloudphone-agent-amd64
+          fi
+          if [ -f /tmp/core-binaries/webrtc-signaling-linux-arm64 ]; then
+            cp /tmp/core-binaries/webrtc-signaling-linux-arm64 recovered_source/webrtc-signaling/webrtc-signaling-linux-arm64
+          fi
+          if [ -f /tmp/core-binaries/webrtc-signaling-linux-amd64 ]; then
+            cp /tmp/core-binaries/webrtc-signaling-linux-amd64 recovered_source/webrtc-signaling/webrtc-signaling-linux-amd64
+          fi
+
+      - name: Build Android Helper (libsys_core.so)
+        run: |
+          cd recovered_source/android-helper
+          chmod +x gradlew
+          ./gradlew clean assembleHelper
+
+      - name: Verify Opus ABI Libraries & Exported Symbols (Fail-Closed)
+        run: |
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            so_file="recovered_source/android-app/app/src/main/jniLibs/$abi/libopus.so"
+            if [ ! -f "$so_file" ]; then
+              echo "ERROR: Missing $so_file for ABI $abi"
+              exit 1
+            fi
+            file_size=$(wc -c < "$so_file")
+            if [ "$file_size" -lt 100000 ]; then
+              echo "ERROR: $so_file is too small ($file_size bytes)"
+              exit 1
+            fi
+            echo "PASS: Found $so_file ($file_size bytes)"
+            readelf -Ws "$so_file" | grep -q "opus_decode" || { echo "ERROR: Missing opus_decode symbol in $so_file"; exit 1; }
+            readelf -Ws "$so_file" | grep -q "opus_decoder_create" || { echo "ERROR: Missing opus_decoder_create symbol in $so_file"; exit 1; }
+            readelf -Ws "$so_file" | grep -q "opus_decoder_destroy" || { echo "ERROR: Missing opus_decoder_destroy symbol in $so_file"; exit 1; }
+            echo "PASS: Verified opus_decode, opus_decoder_create, opus_decoder_destroy in $abi/libopus.so"
+          done
+
+      - name: Run Android Unit Tests
+        run: |
+          cd recovered_source/android-app
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Build Android App (Debug & Release APKs)
+        run: |
+          cd recovered_source/android-app
+          chmod +x gradlew
+          ./gradlew clean assembleDebug assembleRelease
+          cp app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/cloudphone-v1.0.0.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/cloudphone-v1.0.0-debug.apk
+
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-packages
+          path: |
+            cloudphone-v0.3.6/agentd/libsys_core.so
+            recovered_source/android-app/app/build/outputs/apk/debug/app-debug.apk
+            recovered_source/android-app/app/build/outputs/apk/release/app-release-unsigned.apk
+            recovered_source/android-app/app/build/outputs/apk/release/cloudphone-v1.0.0.apk
+            recovered_source/android-app/app/build/outputs/apk/debug/cloudphone-v1.0.0-debug.apk
+
+  validate-docker:
+    name: Docker Deployment Validation & Smoke Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose Configuration
+        run: docker compose config
+
+      - name: Build Docker Container Image
+        run: docker build -t scrcpy-over-webrtc:ci .
+
+      - name: Run Docker Compose Stack & Healthcheck Smoke Test
+        env:
+          AGENT_SECRET: "ci_production_random_secret_48921849128491028491"
+          DEV_MODE: "false"
+          PUBLIC_IP: "127.0.0.1"
+        run: |
+          mkdir -p data downloads
+          docker compose up -d
+          echo "Waiting for signaling container to respond..."
+          for i in $(seq 1 30); do
+            if curl -k -s https://127.0.0.1:8443/api/version | grep -q "0.3.6"; then
+              echo "Signaling service healthy and responsive!"
+              break
+            fi
+            sleep 2
+          done
+          echo "=== 1. Healthcheck Signaling Service ==="
+          curl -k -f -s https://127.0.0.1:8443/api/version
+
+          echo "=== 2. Healthcheck & Active STUN/TURN Probe for Coturn ==="
+          docker compose ps coturn
+          docker compose logs coturn | tail -n 25
+          echo "Waiting for Coturn to listen on port 3478..."
+          coturn_ok=0
+          for i in $(seq 1 15); do
+            if python3 -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.settimeout(1); s.connect(('127.0.0.1', 3478)); s.close()" 2>/dev/null; then
+              echo "PASS: Coturn TCP 3478 socket accepting connections"
+              coturn_ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$coturn_ok" -ne 1 ]; then
+            echo "ERROR: Coturn TCP 3478 socket did not accept connections within 15 seconds"
+            exit 1
+          fi
+          # Strict UDP 3478 STUN Binding probe (fail-closed)
+          python3 -c "
+          import socket, os, sys, struct
+          s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+          s.settimeout(5)
+          tx_id = os.urandom(12)
+          req = struct.pack('!HHI', 0x0001, 0, 0x2112a442) + tx_id
+          try:
+              s.sendto(req, ('127.0.0.1', 3478))
+              data, _ = s.recvfrom(1024)
+              if len(data) < 20:
+                  print('ERROR: STUN response too short (<20 bytes):', len(data), file=sys.stderr)
+                  sys.exit(1)
+              msg_type, msg_len, magic = struct.unpack('!HHI', data[:8])
+              resp_tx_id = data[8:20]
+              if msg_type != 0x0101:
+                  print(f'ERROR: Expected STUN Binding Success (0x0101), got 0x{msg_type:04x}', file=sys.stderr)
+                  sys.exit(1)
+              if magic != 0x2112a442:
+                  print(f'ERROR: STUN magic cookie mismatch: 0x{magic:08x}', file=sys.stderr)
+                  sys.exit(1)
+              if resp_tx_id != tx_id:
+                  print('ERROR: STUN transaction ID mismatch', file=sys.stderr)
+                  sys.exit(1)
+              print('PASS: Coturn UDP 3478 STUN Binding Success (0x0101) verified with matching transaction ID')
+          except Exception as e:
+              print(f'ERROR: Coturn UDP 3478 STUN binding probe failed: {e}', file=sys.stderr)
+              sys.exit(1)
+          "
+          echo "PASS: Coturn TURN runtime healthcheck completed"
+
+          echo "=== 3. Smoke Test Verified Backend Endpoints (Strict JSON Content-Type) ==="
+          # A. /api/version - Must return application/json with version 0.3.6
+          V_RESP=$(curl -k -s -i https://127.0.0.1:8443/api/version)
+          echo "$V_RESP" | grep -iq "content-type: application/json" || { echo "ERROR: /api/version did not return application/json: $V_RESP"; exit 1; }
+          echo "$V_RESP" | grep -q '0.3.6' || { echo "ERROR: /api/version payload mismatch: $V_RESP"; exit 1; }
+          echo "PASS: /api/version returned valid JSON with version 0.3.6"
+
+          # B. /api/auth-status - Must return application/json
+          A_RESP=$(curl -k -s -i https://127.0.0.1:8443/api/auth-status)
+          echo "$A_RESP" | grep -iq "content-type: application/json" || { echo "ERROR: /api/auth-status did not return application/json: $A_RESP"; exit 1; }
+          echo "PASS: /api/auth-status returned valid JSON"
+
+          # C. /devices - Unauthenticated must return 401 Unauthorized (fail-closed)
+          D_UNAUTH=$(curl -k -s -i https://127.0.0.1:8443/devices)
+          echo "$D_UNAUTH" | grep -q "401" || { echo "ERROR: Expected 401 for unauth /devices: $D_UNAUTH"; exit 1; }
+          echo "PASS: /devices unauthenticated rejected with 401 Unauthorized"
+
+          # D. /api/login - Invalid credentials must return 401 fail-closed
+          L_FAIL=$(curl -k -s -i -X POST https://127.0.0.1:8443/api/login -H "Content-Type: application/json" -d '{"username":"fake","password":"wrong"}')
+          echo "$L_FAIL" | grep -q "401" || { echo "ERROR: Bad login did not return 401: $L_FAIL"; exit 1; }
+          echo "PASS: /api/login negative credentials rejected fail-closed"
+
+          # E. /api/login - Admin authentication -> JWT token -> /devices with Bearer token
+          L_SUCCESS=$(curl -k -s -X POST https://127.0.0.1:8443/api/login -H "Content-Type: application/json" -d '{"username":"admin","password":"admin123"}')
+          TOKEN=$(echo "$L_SUCCESS" | grep -o '"token":"[^"]*' | cut -d'"' -f4)
+          if [ -z "$TOKEN" ]; then
+            echo "ERROR: Admin login failed or token empty: $L_SUCCESS"
+            exit 1
+          fi
+          D_AUTH=$(curl -k -s -i -H "Authorization: Bearer $TOKEN" https://127.0.0.1:8443/devices)
+          echo "$D_AUTH" | grep -q "200" || { echo "ERROR: /devices with Bearer token failed: $D_AUTH"; exit 1; }
+          echo "$D_AUTH" | grep -iq "content-type: application/json" || { echo "ERROR: /devices with Bearer did not return application/json: $D_AUTH"; exit 1; }
+          echo "PASS: /devices with Bearer token returned 200 and application/json"
+
+          # F. /api/turn - Authenticated query returns Coturn TURN configuration
+          ICE_RESP=$(curl -k -s -i -H "Authorization: Bearer $TOKEN" https://127.0.0.1:8443/api/turn)
+          echo "$ICE_RESP" | grep -q "200" || { echo "ERROR: /api/turn failed: $ICE_RESP"; exit 1; }
+          echo "$ICE_RESP" | grep -iq "content-type: application/json" || { echo "ERROR: /api/turn did not return application/json: $ICE_RESP"; exit 1; }
+          echo "$ICE_RESP" | grep -q "turn:" || { echo "ERROR: /api/turn missing TURN server URL: $ICE_RESP"; exit 1; }
+          echo "PASS: /api/turn returned valid Coturn TURN configuration with Bearer token"
+          echo "=== 4. Docker Compose Down ==="
+          docker compose down -v
+
+  publish-release:
+    name: Publish Official GitHub Release
+    runs-on: ubuntu-latest
+    needs: [ build-go-binaries, build-web-app, build-android, validate-docker ]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Core Binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: core-binaries
+          path: release-assets/binaries
+
+      - name: Download Web Dist
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: release-assets/web-dist
+
+      - name: Download Android Packages
+        uses: actions/download-artifact@v4
+        with:
+          name: android-packages
+          path: release-assets/android
+
+      - name: Prepare and Flatten Release Assets
+        run: |
+          mkdir -p release-files
+          # Locate all APKs and SOs regardless of artifact folder depth
+          find release-assets/ -type f -name "*.apk" -exec cp {} release-files/ \;
+          find release-assets/ -type f -name "*.so" -exec cp {} release-files/ \;
+          # Locate all core binaries
+          find release-assets/binaries/ -type f -exec cp {} release-files/ \;
+          # Package web distribution archive
+          tar -czf release-files/web-dist.tar.gz -C release-assets/web-dist .
+          echo "=== Staged Release Files ==="
+          ls -la release-files/
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "ScrcpyOverWebRTC ${{ github.ref_name }}" \
+            --notes-file RELEASE_NOTES.md \
+            release-files/*
+

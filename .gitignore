@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Android build outputs & caches
+.gradle/
+**/build/
+!build_all.*
+*.apk.idsig
+
+# Go test binaries & temporary files
+*.tmp
+*.bak
+recovered_source/webrtc-signaling/*.exe
+recovered_source/cloudphone-agent/*.exe
+
+# GitHub file size limit protection (>100MB)
+*.zip
+*.tar.gz
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Runtime persistent storage
+data/
+downloads/
+**/data/
+**/downloads/
+
+# Legacy download archives / duplicate sub-repos
+cloudphone-v0.3.6 (1)/
+cloudphone-agent-magisk-v0.3.6 (1)/
+ScrcpyOverWebRTC/

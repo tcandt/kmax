@@ -1,0 +1,10 @@
+{
+  "name": "authorized-artifact-auditor",
+  "version": "1.0.0",
+  "description": "Authorized Artifact Auditor & Security/Reverse Engineering Skills Suite",
+  "author": {
+    "name": "ptn1411"
+  },
+  "repository": "https://github.com/ptn1411/skill",
+  "license": "Authorized Use Only"
+}

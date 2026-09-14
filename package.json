@@ -1,0 +1,12 @@
+{
+  "name": "homeland-saas-root",
+  "version": "1.0.0",
+  "scripts": {
+    "dev:backend": "powershell -Command \"$env:DEV_MODE='true'; .\\recovered_source\\webrtc-signaling\\webrtc-signaling.exe -port 9000 -assets ./assets -data ./data -downloads ./downloads -debug\"",
+    "dev:frontend": "cd web-app && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

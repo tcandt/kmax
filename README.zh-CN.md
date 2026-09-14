@@ -1,0 +1,219 @@
+# Scrcpy over WebRTC (穿云投屏)
+
+[English](README.md) | 中文
+
+📖 **官方技术文档与保姆级部署指南**：👉 [https://webrtc-phone.com/docs/](https://webrtc-phone.com/docs/)
+
+基于 WebRTC 和 Scrcpy 的高性能、低延迟云手机解决方案，无需客户端，可以通过网页直接连接。
+采用 **Fat Agent (直连模式)** 架构，结合 **硬件级 PTS 透传** 技术，实现媲美原生 Scrcpy 的丝滑体验。
+
+<p align="center">
+  <img src="screenshot/screenshot-pc.png" width="70%" />
+  <img src="screenshot/screenshot-phone.jpg" width="20%" />
+</p>
+
+## 1. 核心特性
+
+- **极致流畅**: 零拷贝流解析 + 硬件级 PTS 透传，提供 WebCodecs 锁相硬件渲染（对标原生 Scrcpy）与标准 HTML5 视频双引擎。
+- **公网直连**: 原生支持 IPv6 直连穿透 CGNAT，智能 WebRTC P2P 打洞与 TURN 自动兜底。
+- **TCP 投屏直控**: （v0.3.6）新增 WebSocket 投屏直控连接模式，提供 100% TCP 穿透能力，受限企业防火墙与无 TURN 环境下免打洞稳定出流。
+- **多机矩阵**: （v0.3.6）支持多设备同屏并发直控，提供平铺/标签/浮窗四大布局，分屏副视窗双连接隔离与聚焦防冲突。
+- **安防监控**: 支持真机熄屏硬件级摄像头直推，专属监控大屏支持物理多摄换挡、PTZ 数字变焦、无损抓拍与录像。
+- **全能交互**: 支持多指触控、物理按键模拟、按键映射 (Keymapping)、IME 汉字无感落屏、静默双向剪贴板与 WebADB 终端。
+- **高效群控**: 支持毫秒级群控同步与大盘直接触控，画幅动态自适应，支持高密数据表格与缩略图悬浮预览。
+- **一键免驱部署**: （v0.3.6）纯浏览器全平台访问；支持域名信令反向代理与 Android 自适应 DNS 解析；支持 WebUSB/WebADB 免驱部署与 Magisk 开机自启。
+- **安卓 App 一体**: 官方 App 主被控一体，被控端支持 Root 与 Shizuku 免电脑自启，支持内置信令单机运行。
+- **设备分享**: 支持免密链接与卡密安全分享设备，支持时长、控制权限与访客会话管理。
+- **全生态兼容**: 广泛兼容 Android 物理真机 (Root / 免 Root)、Android 模拟器、redroid 虚拟化容器及各类商业云手机。
+
+## 2. 快速开始
+### 🔑 默认连接地址与账户凭证
+服务拉起成功后，在同局域网的电脑/手机浏览器中即可打开管理仪表盘大盘：
+* **访问地址**：`https://<您的宿主机IP>:8443` (信令与 Web 默认以 HTTPS 模式运行)
+* **默认管理员账号**：`admin`
+* **默认管理员密码**：`admin123`
+
+### 2.1 Host 网络模式 (推荐)
+如果您的 Linux 宿主机有独立的公网 IP 或是纯内网环境，且没有端口占用冲突，**首选 Host 模式**。
+
+*   **启动命令**:
+    ```bash
+    docker run -d \
+      --pull=always \
+      --restart=always \
+      --name cp-aio \
+      --net=host \
+      -v ./data:/app/data \
+      -e PUBLIC_IP=<宿主机真实IP> \
+      buutuu/scrcpy-over-webrtc:latest
+    ```
+
+- Docker 环境变量参数说明
+无论是 Host 模式还是 NAT/Bridge 模式，都可以通过 `-e` 传入以下环境变量定制容器行为：
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `PUBLIC_IP` | `127.0.0.1` | 宿主机真实 IP，用于 WebRTC ICE 候选地址发布。有公网填公网 IP，纯局域网填宿主机内网 IP |
+| `TURN_USER` | `cloudphone_user` | TURN 中转服务认证用户名，**生产环境务必修改** |
+| `TURN_PASSWORD` | `cloudphone_secure_password` | TURN 中转服务认证密码，**生产环境务必修改** |
+| `SIGNALING_PORT` | `8443` | 容器内部信令 / Web 服务监听端口 |
+| `USE_TLS` | `true` | 是否启用 HTTPS，设为 `false` 后以 HTTP 模式运行 |
+| `NO_AUTH` | - | 设为 `true` 时关闭登录认证，**仅限内网调试，公网环境严禁开启** |
+| `DEFAULT_SETTINGS` | 见下方说明 | 新接入设备的默认画质参数 (JSON) |
+| `EXTERNAL_SIGNALING_PORT` | 同 `SIGNALING_PORT` | 非对称端口映射时，外部实际暴露的信令端口 |
+| `EXTERNAL_TURN_PORT` | `3478` | 非对称端口映射时，外部实际暴露的 TURN 端口 |
+| `COTURN_MIN_PORT` / `COTURN_MAX_PORT` | `50000` / `50100` | TURN 媒体中转使用的 UDP 端口段，Bridge 模式下需与 `-p` 映射范围保持一致 |
+
+*   **优势**: 容器直接使用宿主机网络，零 NAT 转发损耗，无需映射大量 UDP 端口段，网络吞吐量最高。
+*   **注意**: 必须确保宿主机上 `3478`（TURN）和 `8443`（信令）等端口未被其他服务占用。
+*   **用户数据目录挂载**: `-v ./data:/app/data` 容器会把所有的持久化资产包括用户账号、设备标签及下载的文件保存在宿主机本地的 `./data` 目录下，保证升级时不被覆盖。
+*   **PUBLIC_IP**: 当有公网 IP 时填入公网 IP，当局域网内使用时填入宿主机 IP
+
+---
+
+### 2.2 NAT / Bridge 网络模式 (常规)
+见[官方文档: 云服务器容器化部署](https://webrtc-phone.com/docs/deploy-cloud.html)
+
+### 🔄 Docker 镜像更新与版本升级
+由于持久化数据已通过 `-v ./data:/app/data` 挂载至宿主机，更新容器不会丢失账号及设备配置。执行以下命令即可平滑升级至最新版：
+
+```bash
+# 1. 停止并删除旧容器
+docker stop cp-aio && docker rm cp-aio
+
+# 2. 拉取最新镜像并重新启动（以 Host 模式为例）
+docker run -d \
+  --pull=always \
+  --restart=always \
+  --name cp-aio \
+  --net=host \
+  -v ./data:/app/data \
+  -e PUBLIC_IP=<宿主机真实IP> \
+  buutuu/scrcpy-over-webrtc:latest
+```
+
+### 2.3 非 Docker 部署 (绿色单二进制)
+如果您不想安装 Docker，可以直接在物理机或云服务器上以单二进制方式运行。前往 [Releases](https://github.com/hqw700/ScrcpyOverWebRTC/releases) 页面下载完整发布包 `cloudphone-vX.Y.Z.zip`，解压即用，内置 Linux / macOS / Windows (amd64 / arm64) 全平台二进制。
+
+发布包核心目录结构：
+*   `bin/<os>_<arch>/webrtc-signaling`：信令 + Web 服务单二进制
+*   `assets/`：Web 前端静态资源与 Agent 一键部署资源包
+*   `certs/`：HTTPS 自签名证书（生产环境可替换为自己的证书）
+*   `data/`：持久化数据目录（用户账号、设备标签、快照、下载文件）
+
+*   **启动命令 (Linux / macOS)**:
+    ```bash
+    unzip cloudphone-vX.Y.Z.zip -d cloudphone
+    cd cloudphone
+    chmod +x start_server.sh
+    ./start_server.sh
+    ```
+    `start_server.sh` 会自动识别当前系统与架构，拉起对应的二进制。
+*   **Windows**: 解压后进入 `bin\windows_amd64\` 目录，在终端执行 `run.bat`。
+*   **优势**: 单进程零依赖，直接监听宿主机网络（IPv6 双栈），无容器 NAT 损耗；服务端只需放行 `8443` 一个端口，无需映射 UDP 端口段。
+*   **与 Docker 版的差异**: 非 Docker 版不内置 TURN 中转服务，默认通过公共 STUN 打洞，局域网或公网直连场景开箱即用。如需跨 NAT 稳定中转，请自建 coturn 并通过参数指定：
+    ```bash
+    ./start_server.sh -ice_servers "turn:用户名:密码@<TURN服务器IP>:3478"
+    ```
+*   **常用参数**（追加在 `start_server.sh` 之后即可透传）:
+    *   `-port 9443`：修改监听端口（默认 `8443`）
+    *   `-no-auth`：关闭登录认证（仅限内网测试使用）
+    *   `-ice_servers`：自定义 STUN/TURN 服务器列表
+    *   `-debug`：输出详细调试日志
+*   **数据持久化**: 所有用户数据保存在解压目录的 `./data` 下，升级时替换二进制与 `assets` 即可，请勿覆盖 `data` 目录。
+
+---
+
+## 3. 添加手机：部署 Android Agent (入网)
+
+服务端拉起后，访问网页管理后台进入 **“部署新设备”** 页面，页面会根据当前服务地址动态生成接入指令与资源包下载（Docker 用户也可以通过 `docker logs cp-aio` 查看接入说明）。支持以下三种部署方式：
+
+*   **电脑 ADB 一键部署**：无需 Root，适合快速体验与临时调试
+*   **Magisk / KSU 刷机模块**：需要 Root，作为系统服务开机自启，适合长期运行
+*   **App 内运行 Agent**：无需电脑，支持 Root 与 Shizuku (ADB) 两种权限模式
+
+### 3.1 电脑 ADB 一键部署 (无需 Root)
+1. 访问网页管理后台，进入 **“部署新设备”** 页面。
+2. 页面上提供统一的 **“一键部署资源包 (`agent-deploy.zip`)”** 下载。下载并解压在您的电脑端。
+3. 将物理手机使用 USB 线连接电脑，开启 **「USB 调试」**。
+4. 在电脑终端进入解压后的一键包目录，执行由页面动态生成的如下一键脚本指令：
+   * **Linux / macOS**: `chmod +x run.sh && ./run.sh -id <自定义设备ID> -signaling wss://<宿主机IP>:8443`
+   * **Windows CMD**: `run.bat -id <自定义设备ID> -signaling wss://<宿主机IP>:8443`
+
+### 3.2 Magisk / KSU 刷机模块 (Root 开机自启)
+适合需要长期运行、重启后自动入网的设备。刷入后 Agent 作为系统后台服务运行，无需连接电脑即可开机自启并保活。
+
+1. **前置条件**：手机已 Root，并已安装 Magisk、KernelSU 或 APatch 模块管理器。
+2. 在 **“部署新设备”** 页面切换到 **“Magisk / KSU 刷机模块”** 选项卡，下载 `cloudphone-agent-magisk.zip` 并传输到手机。
+3. 打开 Magisk / KernelSU 管理器，选择 **“从本地安装”** 并选中该 ZIP，刷入成功后 **重启手机**。
+4. **配置信令地址与设备 ID**（页面会动态生成命令，任选一种方式）：
+   * **方式 A (命令行)**：在手机终端或 `adb shell` 中执行：
+     ```bash
+     su
+     cpctl set CP_AGENT_SIGNALING "wss://<宿主机IP>:8443"
+     cpctl set CP_AGENT_ID "<自定义设备ID>"
+     cpctl restart
+     ```
+   * **方式 B (交互式菜单)**：`su` 后运行 `cpctl` 打开交互控制台修改。
+   * **方式 C (编辑配置文件)**：编辑 `/data/adb/modules/cloudphone-agent/config.conf`，保存后在 Magisk 模块界面 **连续点击 2 次 Action 按钮** 热重载生效。
+5. **验证状态**：`adb shell "su -c cpctl status"`，或查看运行日志 `/data/local/tmp/cloudphone-agent.log`。
+
+### 3.3 App 内运行 Agent (Root / Shizuku 双模式)
+不想依赖电脑时，可以直接在手机上安装 CloudPhone App，通过 App 内置的 **“被控端模式”** 拉起 Agent。App 已内置对应架构的 Agent 二进制与投屏服务，无需向手机推送任何文件。
+
+1. 从 [Releases](https://github.com/hqw700/ScrcpyOverWebRTC/releases) 页面下载并安装 CloudPhone App (APK)。
+2. 打开 App，在登录页或设备列表页点击 **“进入被控端模式”**。
+3. **选择运行引擎**（二选一）：
+   * **Root 模式**：已 Root 设备直接通过 `su` 提权运行（支持 Magisk / KernelSU / APatch）。
+   * **ADB (Shizuku) 模式**：**免 Root** 方案。先在手机上安装并激活 [Shizuku](https://shizuku.rikka.app/)（Android 11+ 可通过「无线调试」直接激活），在 App 内完成 Shizuku 授权后，Agent 将以 `shell` 用户 (UID 2000) 身份运行——ADB 权限原生具备屏幕截取与输入注入能力，因此未 Root 的物理真机也能完整被控。
+4. 在界面中填写 **信令服务器地址**（`ws://` 或 `wss://`，如 `wss://<宿主机IP>:8443`）与 **设备唯一 ID**，点击启动即可入网。
+5. 界面会实时显示 Agent 进程 PID 与最近运行日志，方便排查问题。
+
+> [!TIP]
+> App 被控端还内置 **“独立单机模式”**：开启后信令服务与 Web 大盘也一并运行在该手机内，局域网浏览器直接访问 `https://<手机IP>:8443` 即可连接，完全无需外部服务器。
+
+---
+
+## 4. 前端二次开发指引 ( Development )
+
+前端源码位于 `web-app` 目录下，完全开源。我们提供 **“本地前端 + 官方 Docker AIO 容器后端”** 的极速混合开发模式，无需在本地配置繁琐的 Go 编译环境即可实时热更新开发。
+
+1. **准备后端**：参考前文启动官方 AIO 容器。
+2. **安装前端依赖**：
+   ```bash
+   cd web-app
+   npm install
+   ```
+3. **本地开发与实时热更新**：
+   通过指定后端的 IP 地址启动开发服务器（Vite 的代理会将所有的 API 和 WebSocket 连接自动转发给容器）：
+   ```bash
+   # 如果后端跑在本地（注意：若后端开启了 HTTPS，请使用 https://localhost:8443）
+   VITE_PROXY_TARGET=https://localhost:8443 npm run dev
+   ```
+4. **编译构建**：
+   ```bash
+   npm run build
+   ```
+   打包产物默认输出至根目录的 `assets/` 目录下。
+
+> 💡 详细的前端目录结构、开发参数调优和 Docker 挂载联调说明，请直接查阅文档：[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
+
+---
+
+## 5. 开源协议与版权声明 ( License & Provenance )
+
+本项目基于 [Apache License 2.0](LICENSE) 开源发布。
+
+### 致谢与依赖开源项目
+- [ScrcpyOverWebRTC (Upstream)](https://github.com/hqw700/ScrcpyOverWebRTC) by hqw700 (Apache-2.0 / MIT)
+- [Genymobile/scrcpy](https://github.com/Genymobile/scrcpy) (Apache-2.0)
+- [Pion WebRTC](https://github.com/pion/webrtc) (MIT)
+- [ya-webadb](https://github.com/yume-chan/ya-webadb) (MIT)
+- [Shizuku-API](https://github.com/RikkaApps/Shizuku-API) (Apache-2.0)
+
+### 商业授权与使用边界
+- 上游前端 (`web-app`) 基于 MIT 协议开源。本仓库重构源码基于 Apache-2.0 协议。
+- 上游官方预编译二进制组件原发布于非商业学习与测试条款。若计划用于商业化云真机托管、付费出租等商业运营，建议直接联系上游作者获得正式书面授权。
+
+完整版权及各组件协议详见 [NOTICE](NOTICE)。
+
