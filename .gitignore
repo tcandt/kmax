@@ -18,11 +18,13 @@ recovered_source/cloudphone-agent/*.exe
 *.zip
 *.tar.gz
 
-# IDE
+# IDE & Python
 .idea/
 .vscode/
 *.swp
 *.swo
+__pycache__/
+*.pyc
 
 # OS
 .DS_Store
