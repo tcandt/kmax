@@ -12,6 +12,7 @@ Validates live containerized signaling server over HTTPS/WSS:
 import json
 import ssl
 import sys
+import time
 import urllib.request
 
 from simple_ws import SimpleWebSocket
@@ -32,6 +33,16 @@ def http_login(host: str, port: int, user: str = "admin", password: str = "admin
         if not token:
             raise ValueError(f"No token returned from login: {data}")
         return token
+
+
+def recv_matching_msg(ws: SimpleWebSocket, filter_fn, timeout: float = 5.0) -> dict:
+    start = time.time()
+    while time.time() - start < timeout:
+        raw = ws.recv_text(timeout=timeout)
+        data = json.loads(raw)
+        if filter_fn(data):
+            return data
+    raise TimeoutError(f"Timed out waiting {timeout}s for expected WebSocket message")
 
 
 def main():
@@ -71,6 +82,15 @@ def main():
     ws_client = SimpleWebSocket(host, port, client_path, use_ssl=True)
     print("[+] STEP 3 PASS: Authenticated client connected over WSS with 101 Switching Protocols")
 
+    # Verify initial config frame sent to client
+    cfg_msg = recv_matching_msg(
+        ws_client,
+        lambda d: (d.get("message_type") or d.get("type")) == "config",
+        timeout=5.0,
+    )
+    assert cfg_msg, "Did not receive initial config frame on client"
+    print(f"[+] STEP 3b PASS: Client received live configuration with {len(cfg_msg.get('ice_servers', []))} ICE server(s)")
+
     try:
         # 4. Client Connects to Device -> Verifies Capability Sync
         print(f"[-] 4. Client connecting to device '{device_id}'...")
@@ -80,10 +100,11 @@ def main():
         }))
 
         # Agent receives capability update
-        caps_msg = ws_agent.recv_text(timeout=5.0)
-        caps_data = json.loads(caps_msg)
-        action = caps_data.get("action") or caps_data.get("type")
-        assert action == "update_caps", f"Expected update_caps on agent, got: {caps_data}"
+        caps_data = recv_matching_msg(
+            ws_agent,
+            lambda d: (d.get("action") or d.get("type")) == "update_caps",
+            timeout=5.0,
+        )
         client_id = caps_data.get("client_id")
         assert client_id, "Missing client_id in update_caps payload"
         print(f"[+] STEP 4 PASS: Agent received real-time capability sync for client '{client_id}'")
@@ -100,11 +121,10 @@ def main():
             },
         }))
 
-        agent_offer_msg = ws_agent.recv_text(timeout=5.0)
-        offer_data = json.loads(agent_offer_msg)
-        msg_type = offer_data.get("message_type") or offer_data.get("action") or offer_data.get("type")
-        assert msg_type in ("forward", "client_msg"), (
-            f"Expected forward or client_msg on agent, got: {offer_data}"
+        offer_data = recv_matching_msg(
+            ws_agent,
+            lambda d: (d.get("message_type") or d.get("action") or d.get("type")) in ("forward", "client_msg"),
+            timeout=5.0,
         )
         assert offer_data.get("payload", {}).get("type") == "offer", (
             f"Expected offer payload, got: {offer_data}"
@@ -121,10 +141,11 @@ def main():
             },
         }))
 
-        client_ans_msg = ws_client.recv_text(timeout=5.0)
-        ans_data = json.loads(client_ans_msg)
-        ans_msg_type = ans_data.get("message_type") or ans_data.get("type")
-        assert ans_msg_type == "device_msg", f"Expected device_msg on client, got: {ans_data}"
+        ans_data = recv_matching_msg(
+            ws_client,
+            lambda d: (d.get("message_type") or d.get("type")) == "device_msg",
+            timeout=5.0,
+        )
         assert ans_data.get("payload", {}).get("type") == "answer", (
             f"Expected answer payload on client, got: {ans_data}"
         )

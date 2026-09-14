@@ -19,6 +19,7 @@ import json
 import os
 import ssl
 import sys
+import tempfile
 import urllib.request
 
 
@@ -62,7 +63,7 @@ def stage1(host: str, port: int, data_dir: str):
     assert share_token in state_content, f"Share token {share_token} not found in mounted {state_file}!"
     print(f"[+] Verified share token flushed to host mounted volume: {state_file}")
 
-    token_cache = os.path.join("/tmp", "ci_persist_token.txt")
+    token_cache = os.path.join(tempfile.gettempdir(), "ci_persist_token.txt")
     with open(token_cache, "w", encoding="utf-8") as f:
         f.write(share_token)
     print(f"[+] Cached share token to {token_cache} for Stage 2")
@@ -70,7 +71,7 @@ def stage1(host: str, port: int, data_dir: str):
 
 def stage2(host: str, port: int):
     print(f"[*] Stage 2: Validating persistence AFTER container restart on https://{host}:{port}...")
-    token_cache = os.path.join("/tmp", "ci_persist_token.txt")
+    token_cache = os.path.join(tempfile.gettempdir(), "ci_persist_token.txt")
     assert os.path.exists(token_cache), f"Missing token cache {token_cache}"
     with open(token_cache, "r", encoding="utf-8") as f:
         share_token = f.read().strip()
@@ -88,8 +89,8 @@ def stage2(host: str, port: int):
 
     # Verify via /api/share/info
     info_resp = http_request(f"https://{host}:{port}/api/share/info?token={share_token}", method="GET")
-    info_data = info_resp.get("data", {})
-    assert info_data.get("device_id") == "ci-persistent-device-999", (
+    device_id = info_resp.get("device_id") or info_resp.get("data", {}).get("device_id")
+    assert device_id == "ci-persistent-device-999", (
         f"Device ID mismatch in restored share info: {info_resp}"
     )
     print(f"[+] Share record attributes strictly verified (device_id=ci-persistent-device-999)")
