@@ -50,7 +50,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./downloads:/app/downloads
-      - ./cloudphone-v0.3.6/certs:/app/certs:ro
+      - ./certs:/app/certs:ro
     depends_on:
       - coturn
     healthcheck:

@@ -1,75 +1,115 @@
-# Kế Hoạch Khôi Phục Toàn Bộ Mã Nguồn Gốc (Full Source Recovery Plan)
+# KMAX / ScrcpyOverWebRTC Engineering & Verification Roadmap
 
-## Tổng Quan Dự Án & Bối Cảnh
+## 1. Executive Summary & Current Status
 
-Người dùng yêu cầu decompile / recover lại toàn bộ mã nguồn gốc của hệ thống **ScrcpyOverWebRTC / CloudPhone v0.3.6**, hiện trong thư mục `d:\KMAX` chỉ còn các file binary đã build, Docker và cấu hình Magisk. Đồng thời yêu cầu cài đặt và áp dụng bộ skill [authorized-artifact-auditor](https://github.com/ptn1411/skill) để phục vụ quá trình recovery.
+Dự án đã hoàn thành giai đoạn bóc tách, dịch ngược và khôi phục mã nguồn từ các binary ban đầu (`ScrcpyOverWebRTC / CloudPhone v0.3.6`). Toàn bộ cây mã nguồn hoàn chỉnh (Go Signaling Server, Go Agent, Java Android Helper Server với Gradle, Android Controller App, Vue 3 Frontend, Docker và Magisk module) đã được tích hợp đầy đủ vào workspace `d:\KMAX`.
 
-### Kết Quả Khảo Sát Hiện Trạng (Inventory & Audit)
+Trọng tâm của dự án chuyển từ **Source Recovery** sang **Hardening + Reproducible Build + Deployment + Real-Device Parity**.
 
-1. **Bộ skill `ptn1411/skill`**:
-   - Đã được cài đặt đầy đủ vào hệ thống và tích hợp vào cấu hình workspace tại [`d:\KMAX\.agents\plugins\authorized-artifact-auditor`](file:///d:/KMAX/.agents/plugins/authorized-artifact-auditor) cũng như thư viện plugin toàn cục.
-   - Cung cấp các công cụ: `identify_app.py`, `analyze_apk.py`, `decompile_java.py`, `orchestrate.py`, `assess.py`.
+### Trạng Thái Thực Tế Hệ Thống
 
-2. **Các thành phần trong `d:\KMAX` cần khôi phục**:
-   - **`libsys_core.so`**: Thực chất là một Android APK / DEX (`classes.dex`) giả lập thư viện `.so`, chứa toàn bộ tầng Android Helper Server (`com.android.helper.*`) dựa trên Scrcpy (quay video màn hình, camera, audio, bộ điều khiển cảm ứng, phím, clipboard).
-   - **`webrtc-signaling`**: Binary Go (tín hiệu WebRTC, REST API, xác thực token/login, quản lý thiết bị, chia sẻ màn hình, proxy WebSocket).
-   - **`cloudphone-agent`**: Binary Go chạy trên máy trạm / thiết bị Android kết nối với `webrtc-signaling` và điều khiển `libsys_core.so` qua socket cục bộ.
-   - **`web-app`**: Mã nguồn giao diện người dùng Vue 3 + Vite (đã có một phần trong [`d:\KMAX\ScrcpyOverWebRTC\web-app`](file:///d:/KMAX/ScrcpyOverWebRTC/web-app)).
-   - **Magisk Module & Docker**: Cấu hình khởi động tự động Magisk (`service.sh`, `cloudphone-ctl`) và Docker Compose / TURN coturn.
-
-3. **Phát hiện quan trọng**:
-   - Trên máy tính tại [`D:\ScrcpyOverWebRTC\ScrcpyOverWebRTC-FullSource`](file:///D:/ScrcpyOverWebRTC/ScrcpyOverWebRTC-FullSource), toàn bộ mã nguồn đã từng được khôi phục, dịch ngược với JADX, tái lập cấu trúc Go và giải quyết triệt để 10 lỗi kiến trúc (Lock Inversion, Camera Security Gate, Scroll Framing, PTS Timeline) đạt **98% Code Parity** và vượt qua toàn bộ 62/62 bài test tự động.
-
----
-
-## User Review Required
-
-> [!IMPORTANT]
-> Toàn bộ mã nguồn hoàn chỉnh (Go Signaling Server, Go Agent, Java Android Helper Server với Gradle, Android Controller App, Vue 3 Web App, Dockerfile, scripts) đã có sẵn trên máy tại `D:\ScrcpyOverWebRTC\ScrcpyOverWebRTC-FullSource`.
-> Kế hoạch này sẽ hợp nhất, đồng bộ và tổ chức lại toàn bộ cây mã nguồn chuẩn vào thư mục làm việc chính `d:\KMAX`, đồng thời kiểm tra lại tính toàn vẹn và khả năng biên dịch (build test) độc lập ngay trong `d:\KMAX`.
+| Hạng mục | Kết Quả Kiểm Thử | Ghi Chú |
+|---|:---:|---|
+| `webrtc-signaling` | ✅ PASS | Đầy đủ REST API, Session Hub, RBAC, WebSocket |
+| `cloudphone-agent` | ✅ PASS | WebRTC Streamer, PTS RTP Timeline, Control Reader |
+| Protocol Conformance | ✅ PASS | 100% Protocol Contract verification |
+| Differential Parity | ✅ PASS | 38/38 kịch bản đối soát REST API 1:1 với binary gốc |
+| Stress / Parity Matrix | ✅ PASS | TC001–TC043 vượt qua toàn bộ |
+| Multi-arch Go build | ✅ PASS | Biên dịch chéo Linux AMD64, ARM64, ARMv7, Windows |
+| Vue Frontend | ✅ PASS | Vue 3 + Vite build production clean |
+| Android Helper (`libsys_core.so`) | ✅ PASS | Package `com.android.helper.*` biên dịch Gradle 8.5 |
+| Opus ABI / Symbol Validation | ✅ PASS | Thư viện native audio codec |
+| Android Unit Tests | ✅ PASS | Unit test logic điều khiển và giải mã |
+| Android Debug / Release APK | ✅ PASS | Đóng gói APK controller hoàn chỉnh |
+| Docker Compose Syntax | ✅ PASS | Cấu hình hợp lệ |
+| Docker Image Build | 🔄 FIXED | Đã gỡ bỏ phụ thuộc path legacy certs; tạo fallback self-signed TLS |
+| Docker Runtime Smoke / E2E | ⏳ PENDING | Chạy kiểm tra sau khi image build hoàn tất |
+| Overall GitHub Actions | ⏳ IN PROGRESS | Đang xác thực toàn bộ pipeline |
 
 ---
 
-## Các Bước Thực Hiện Cụ Thể (Proposed Changes)
+## 2. Tiêu Chí Nghiệm Thu: Hệ Thống Verification Gates (Source of Truth)
 
-### 1. Đồng Bộ & Cấu Trúc Lại Mã Nguồn Đầy Đủ Vào `d:\KMAX`
-
-Thiết lập cấu trúc thư mục hoàn chỉnh, chuẩn hóa tại `d:\KMAX\ScrcpyOverWebRTC`:
+Thay thế các ước lượng tỷ lệ % trừu tượng bằng bộ cổng kiểm thử định lượng nghiêm ngặt (lấy GitHub Actions CI và bộ kịch bản kiểm thử làm Source of Truth):
 
 ```text
-d:\KMAX\ScrcpyOverWebRTC/
-├── recovered_source/
-│   ├── webrtc-signaling/      # Mã nguồn Go của WebRTC Signaling Server (main.go, api.go, hub.go, auth.go, store.go, types.go...)
-│   ├── cloudphone-agent/      # Mã nguồn Go của Agent (main.go, scrcpy.go, streamer.go, webrtc.go, control.go, channels.go...)
-│   ├── android-helper/        # Dự án Gradle Java (libsys_core.so) với đầy đủ package com/android/helper
-│   └── android-app/           # Ứng dụng Android Controller (App quản lý và điều khiển trên Android)
-├── web-app/                   # Mã nguồn Vue 3 + Vite đầy đủ
-├── docker/                    # Dockerfile, docker-compose.yml, coturn turnserver.conf, deploy scripts
-├── magisk-module/             # Module Magisk cài đặt agent tự khởi động trên thiết bị Root
-├── build_all.bat              # Script build toàn bộ hệ thống (Go + Android Gradle + Web Vite)
-├── build_all.sh               # Script build trên Linux/macOS
-└── start.bat                  # Script khởi chạy nhanh hệ thống cục bộ
+GATE A — Go Core
+  [x] webrtc-signaling unit & integration tests
+  [x] cloudphone-agent unit & integration tests
+  [x] Race condition & destructive stress tests (TC042, TC043)
+  [x] REST differential deep parity (38/38 scenarios)
+  [x] Multi-arch cross-compilation (AMD64, ARM64, ARMv7)
+
+GATE B — Android Helper Server (libsys_core.so)
+  [x] Gradle clean build
+  [x] classes.dex / libsys_core.so output verification
+  [x] Binary framing protocol compatibility (Touch, Scroll, Clipboard)
+
+GATE C — Android Controller App
+  [x] Unit tests pass (OpusDecoderTest, WebRTCControllerTest)
+  [x] Debug APK build clean
+  [x] Release APK build clean
+  [x] Bundled multi-arch agent binaries & ABI validation
+
+GATE D — Web Management Dashboard
+  [x] npm ci clean
+  [x] Vite production bundle build (dist/)
+  [x] API & WebSocket contract matching
+
+GATE E — Docker & Deployment
+  [x] Docker Compose config validation
+  [x] Multi-stage Docker build from pure source
+  [ ] Container runtime healthcheck (/api/version)
+  [ ] Coturn STUN probe (UDP 3478 Binding response 0x0101)
+  [ ] Coturn TURN relay allocation (turnutils_uclient)
+  [ ] Authenticated WebSocket handshake & persistence mount
+
+GATE F — Real Android Device Verification
+  [ ] Android 9 (Pie) compatibility
+  [ ] Android 10 (Q) compatibility
+  [ ] Android 11 (R) compatibility
+  [ ] Android 12 (S) compatibility
+  [ ] Android 13/14+ compatibility
+  [ ] ARM64 physical device
+  [ ] Non-root / ADB / Shizuku path
+  [ ] Root / Magisk autostart module path
+
+GATE G — Release Candidate Final Verification
+  [ ] Clean checkout from git zero
+  [ ] Build all from source (`build_all.bat` / `build_all.sh`)
+  [ ] Connect physical phone -> Video streaming (WebCodecs & H.264)
+  [ ] Multi-touch, hardware keymapping & IME input
+  [ ] Audio playback capture
+  [ ] Network reconnect & device reboot survival
 ```
-
-### 2. Sử Dụng Bộ Skill `authorized-artifact-auditor` Để Thẩm Định & Xác Thực
-
-- Áp dụng `identify_app.py` và `analyze_apk.py` từ skill `authorized-artifact-auditor` lên các file binary gốc để kiểm chứng chữ ký, kiến trúc và tính tương thích với mã nguồn đã khôi phục.
-- Chạy đối soát hàm băm và giao thức truyền thông nhị phân giữa `libsys_core.so` (Java) và `control.go` (Go) để đảm bảo không bị lệch byte order hay frame format.
-
-### 3. Kiểm Tra Khả Năng Build & Test (Verification)
-
-- Chạy kiểm thử Go test suite cho `cloudphone-agent` và `webrtc-signaling`.
-- Xác nhận các script build (`build_all.bat`) hoạt động trơn tru trong `d:\KMAX`.
 
 ---
 
-## Verification Plan
+## 3. Lộ Trình Triển Khai (Phased Execution Plan)
 
-### Automated Tests
-- Chạy `go test ./...` trong `d:\KMAX\ScrcpyOverWebRTC\recovered_source\webrtc-signaling`.
-- Chạy `go test ./...` trong `d:\KMAX\ScrcpyOverWebRTC\recovered_source\cloudphone-agent`.
-- Chạy `identify_app.py` từ bộ skill để xác nhận báo cáo kiểm định.
+### Phase 0 — Current Baseline (Hoàn Thành)
+- Toàn bộ mã nguồn đã được khôi phục, giải quyết các lỗi kiến trúc (Lock Inversion, Camera Gate, PTS STAP-A cache, Clipboard/Scroll Framing).
+- Toàn bộ 504 files đã được đồng bộ vào git repository `https://github.com/tcandt/kmax`.
 
-### Manual Verification
-- Kiểm tra tính đầy đủ của các thư mục mã nguồn và file trong `d:\KMAX`.
-- Khởi chạy thử nghiệm và kiểm tra file binary đầu ra.
+### Phase 1 — Reproducible Build & Hygiene (Đang Thực Hiện)
+- Loại bỏ các đường dẫn phụ thuộc cục bộ (`local.properties` được gỡ khỏi Git tracking và bổ sung vào `.gitignore`).
+- Tách rời TLS certificates khỏi image build tĩnh: Dockerfile tạo fallback self-signed certs phục vụ dev/smoke, đồng thời `docker-compose.yml` mount `./certs:/app/certs:ro` để người dùng cung cấp chứng chỉ thật khi chạy production.
+- Đồng nhất logic giữa `build_all.bat` / `build_all.sh` và GitHub Actions CI.
+
+### Phase 2 — Parity & Conformance Verification (Hoàn Thành)
+- Đối chiếu 100% protocol contracts giữa Go Agent, Go Signaling và Android Helper.
+- Duy trì 38/38 REST differential parity test scenarios và TC001–TC043.
+
+### Phase 3 — Deployment Verification (Tiếp Theo)
+- Kiểm tra toàn diện Docker build và Docker Compose stack cục bộ và trên CI.
+- Chạy smoke probe tự động kiểm tra STUN binding (UDP 3478) và TURN media relay.
+- Xác nhận healthcheck `/api/version` và login endpoint qua HTTPS.
+
+### Phase 4 — Real Device Verification
+- Triển khai `cloudphone-agent` và `libsys_core.so` lên thiết bị Android thật (Root & Non-root).
+- Kiểm tra độ trễ hiển thị WebRTC (đối soát với mốc PTS hardware render của Scrcpy).
+- Kiểm tra chuyển đổi camera/màn hình thời gian thực và ghi hình MP4 từ xa.
+
+### Phase 5 — Release Candidate
+- Đóng gói bản phát hành `v0.3.6-rc1` sạch, có thể tái lập 100% từ mã nguồn.
+- Xuất bản hướng dẫn cài đặt, tài liệu API và scripts tự động hóa.

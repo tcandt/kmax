@@ -56,11 +56,18 @@ COPY --from=go-builder /out/cloudphone-agent* /app/agent-binaries/
 # Copy web frontend production assets
 COPY --from=web-builder /build/web-app/dist /app/assets
 
-# Copy certificates
-COPY cloudphone-v0.3.6/certs/ /app/certs/
-
 # Create persistence and runtime directories
 RUN mkdir -p /app/data /app/downloads /app/certs && chmod -R 777 /app/data /app/downloads /app/certs
+
+# Generate fallback self-signed TLS certificates for development/testing if not mounted via volume
+RUN apk add --no-cache openssl && \
+    openssl req -x509 -newkey rsa:2048 -nodes \
+      -keyout /app/certs/server.key \
+      -out /app/certs/server.crt \
+      -days 3650 \
+      -subj "/CN=localhost" \
+      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" && \
+    apk del openssl
 
 # Configure runtime environment
 ENV DATA_DIR=/app/data

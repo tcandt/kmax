@@ -106,7 +106,9 @@ This document establishes the official **40-Test Parity Matrix** comparing the o
 | **TC037** | `SignalingPureGoCompilation` | `webrtc-signaling` build | Compiles with pure Go without CGO dependencies | Clean compilation on Windows/Linux | **PASS** |
 | **TC038** | `AgentPureGoCompilation` | `cloudphone-agent` cross-compile | Cross-compiles for Linux ARM64, ARMv7, AMD64 | Pure Go cross-compilation successful | **PASS** |
 | **TC039** | `AndroidKotlinAppStructure` | `android-app` Gradle project | Valid build.gradle, AndroidManifest, Shizuku, AudioTrack | Verified Gradle 8.5 project layout | **PASS** |
-| **TC040** | `DockerSourceBuildPipeline` | `Dockerfile` multi-stage | Pure source multi-stage Docker build pipeline | Clean 3-stage build verified | **PASS** |
+| **TC040** | `DockerSourceBuildPipeline` | `Dockerfile` multi-stage | Pure source multi-stage Docker build pipeline | Missing runtime TLS certificate path dependency (resolved; pending CI re-run) | **FAIL / BLOCKED** |
+| **TC044** | `DockerRuntimeSmoke` | Container HTTP/HTTPS health & endpoints | `/api/version`, `/api/auth-status`, `/devices`, `/api/login` JSON contract | Not executed pending Docker CI build pass | **NOT EXECUTED** |
+| **TC045** | `CoturnStunTurn` | Coturn STUN probe & TURN allocation | TCP/UDP 3478 STUN binding & TURN relay | Not executed pending Docker CI build pass | **NOT EXECUTED** |
 
 ---
 

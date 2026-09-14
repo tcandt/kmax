@@ -4,6 +4,7 @@ node_modules/
 # Android build outputs & caches
 .gradle/
 **/build/
+**/local.properties
 !build_all.*
 *.apk.idsig
 
@@ -40,6 +41,14 @@ data/
 downloads/
 **/data/
 **/downloads/
+
+# Runtime TLS Certificates (Private keys & generated certs)
+certs/*.key
+certs/*.p12
+certs/*.crt
+certs/*.pem
+!certs/create_certs.sh
+!certs/.gitkeep
 
 # Legacy download archives / duplicate sub-repos
 cloudphone-v0.3.6 (1)/

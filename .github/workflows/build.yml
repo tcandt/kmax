@@ -186,7 +186,10 @@ jobs:
           DEV_MODE: "false"
           PUBLIC_IP: "127.0.0.1"
         run: |
-          mkdir -p data downloads
+          mkdir -p data downloads certs
+          if [ ! -f certs/server.crt ] || [ ! -f certs/server.key ]; then
+            cd certs && sh create_certs.sh && cd ..
+          fi
           docker compose up -d
           echo "Waiting for signaling container to respond..."
           for i in $(seq 1 30); do
