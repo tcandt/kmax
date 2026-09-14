@@ -102,8 +102,9 @@ def main():
 
         agent_offer_msg = ws_agent.recv_text(timeout=5.0)
         offer_data = json.loads(agent_offer_msg)
-        assert offer_data.get("action") == "client_msg" or offer_data.get("type") == "client_msg", (
-            f"Expected client_msg on agent, got: {offer_data}"
+        msg_type = offer_data.get("message_type") or offer_data.get("action") or offer_data.get("type")
+        assert msg_type in ("forward", "client_msg"), (
+            f"Expected forward or client_msg on agent, got: {offer_data}"
         )
         assert offer_data.get("payload", {}).get("type") == "offer", (
             f"Expected offer payload, got: {offer_data}"
@@ -112,7 +113,7 @@ def main():
 
         test_sdp_answer = "v=0\r\no=- 445566 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\n"
         ws_agent.send_text(json.dumps({
-            "type": "device_msg",
+            "type": "forward",
             "client_id": client_id,
             "payload": {
                 "type": "answer",
@@ -122,7 +123,9 @@ def main():
 
         client_ans_msg = ws_client.recv_text(timeout=5.0)
         ans_data = json.loads(client_ans_msg)
-        assert ans_data.get("type") == "device_msg" or ans_data.get("payload", {}).get("type") == "answer", (
+        ans_msg_type = ans_data.get("message_type") or ans_data.get("type")
+        assert ans_msg_type == "device_msg", f"Expected device_msg on client, got: {ans_data}"
+        assert ans_data.get("payload", {}).get("type") == "answer", (
             f"Expected answer payload on client, got: {ans_data}"
         )
         print("[+] STEP 5b PASS: WebRTC SDP Answer successfully routed Agent -> Signaling -> Client")
