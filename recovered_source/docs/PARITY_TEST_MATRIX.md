@@ -124,6 +124,14 @@ This document establishes the official **40-Test Parity Matrix** comparing the o
 
 ---
 
+### Group 9: Physical Android Device Verification (GATE F - TC048)
+
+| Test ID | Name | Method / Target | Expected Contract | Actual Result | Status |
+|---|---|---|---|---|:---:|
+| **TC048** | `RealAndroidDeviceStreamingE2E` | Physical Samsung Galaxy S7 (`SM-G930F`, Android 10, ARM64) over ADB LAN `192.168.1.168:5555` | Deploy recovered `cloudphone-agent` & `libsys_core.so`, initialize `app_process` Scrcpy Helper, stream hardware H.264 video, establish WebRTC P2P to Vue frontend | Non-root `app_process` launched; H.264 (544x960) video stream active with SPS/PPS (21B); WebRTC PeerConnection connected; DataChannels opened; Browser streaming verified | **PASS** |
+
+---
+
 ### Gate C: Differential Deep Semantic Parity within Test Fixtures (38/38 Scenarios)
 
 All 38 test scenarios are verified side-by-side between the original binary `ScrcpyOverWebRTC v0.3.6` and `recovered_source/webrtc-signaling` via recursive JSON deep semantic comparison across status codes, deep structures, and semantic values. Ephemeral dynamic tokens, task IDs, machine IDs, and addresses (specifically constrained to `$.data.current` for `/api/server/addresses`) are excluded as expected runtime dynamic variations:

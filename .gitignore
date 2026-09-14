@@ -52,7 +52,8 @@ certs/*.pem
 !certs/create_certs.sh
 !certs/.gitkeep
 
-# Legacy download archives / duplicate sub-repos
+# Legacy download archives / duplicate sub-repos & backups
 cloudphone-v0.3.6 (1)/
 cloudphone-agent-magisk-v0.3.6 (1)/
 ScrcpyOverWebRTC/
+backup/
