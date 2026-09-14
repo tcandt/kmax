@@ -22,9 +22,9 @@ Trọng tâm của dự án chuyển từ **Source Recovery** sang **Hardening +
 | Android Unit Tests | ✅ PASS | Unit test logic điều khiển và giải mã |
 | Android Debug / Release APK | ✅ PASS | Đóng gói APK controller hoàn chỉnh |
 | Docker Compose Syntax | ✅ PASS | Cấu hình hợp lệ |
-| Docker Image Build | 🔄 FIXED | Đã gỡ bỏ phụ thuộc path legacy certs; tạo fallback self-signed TLS |
-| Docker Runtime Smoke / E2E | ⏳ PENDING | Chạy kiểm tra sau khi image build hoàn tất |
-| Overall GitHub Actions | ⏳ IN PROGRESS | Đang xác thực toàn bộ pipeline |
+| Docker Image Build | ✅ PASS | Đã gỡ bỏ phụ thuộc path legacy certs; tạo fallback self-signed TLS |
+| Docker Runtime Smoke / E2E | ✅ PASS | Container HTTP/HTTPS health, auth contract, STUN/TURN binding pass |
+| Overall GitHub Actions | ✅ SUCCESS | 100% Green trên cả 4 jobs (Run 34861222422) |
 
 ---
 
@@ -59,10 +59,10 @@ GATE D — Web Management Dashboard
 GATE E — Docker & Deployment
   [x] Docker Compose config validation
   [x] Multi-stage Docker build from pure source
-  [ ] Container runtime healthcheck (/api/version)
-  [ ] Coturn STUN probe (UDP 3478 Binding response 0x0101)
-  [ ] Coturn TURN relay allocation (turnutils_uclient)
-  [ ] Authenticated WebSocket handshake & persistence mount
+  [x] Container runtime healthcheck (/api/version)
+  [x] Coturn STUN probe (UDP 3478 Binding response 0x0101)
+  [x] Coturn TURN relay allocation (turnutils_uclient)
+  [x] Authenticated WebSocket handshake & persistence mount
 
 GATE F — Real Android Device Verification
   [ ] Android 9 (Pie) compatibility
@@ -91,7 +91,7 @@ GATE G — Release Candidate Final Verification
 - Toàn bộ mã nguồn đã được khôi phục, giải quyết các lỗi kiến trúc (Lock Inversion, Camera Gate, PTS STAP-A cache, Clipboard/Scroll Framing).
 - Toàn bộ 504 files đã được đồng bộ vào git repository `https://github.com/tcandt/kmax`.
 
-### Phase 1 — Reproducible Build & Hygiene (Đang Thực Hiện)
+### Phase 1 — Reproducible Build & Hygiene (Hoàn Thành)
 - Loại bỏ các đường dẫn phụ thuộc cục bộ (`local.properties` được gỡ khỏi Git tracking và bổ sung vào `.gitignore`).
 - Tách rời TLS certificates khỏi image build tĩnh: Dockerfile tạo fallback self-signed certs phục vụ dev/smoke, đồng thời `docker-compose.yml` mount `./certs:/app/certs:ro` để người dùng cung cấp chứng chỉ thật khi chạy production.
 - Đồng nhất logic giữa `build_all.bat` / `build_all.sh` và GitHub Actions CI.
@@ -100,10 +100,10 @@ GATE G — Release Candidate Final Verification
 - Đối chiếu 100% protocol contracts giữa Go Agent, Go Signaling và Android Helper.
 - Duy trì 38/38 REST differential parity test scenarios và TC001–TC043.
 
-### Phase 3 — Deployment Verification (Tiếp Theo)
-- Kiểm tra toàn diện Docker build và Docker Compose stack cục bộ và trên CI.
-- Chạy smoke probe tự động kiểm tra STUN binding (UDP 3478) và TURN media relay.
-- Xác nhận healthcheck `/api/version` và login endpoint qua HTTPS.
+### Phase 3 — Deployment Verification (Hoàn Thành)
+- Kiểm tra toàn diện Docker build và Docker Compose stack cục bộ và trên CI (Clean multi-stage build).
+- Chạy smoke probe tự động kiểm tra STUN binding (UDP 3478) và TURN media relay pass.
+- Xác nhận healthcheck `/api/version` và login endpoint qua HTTPS và JSON contract pass.
 
 ### Phase 4 — Real Device Verification
 - Triển khai `cloudphone-agent` và `libsys_core.so` lên thiết bị Android thật (Root & Non-root).
